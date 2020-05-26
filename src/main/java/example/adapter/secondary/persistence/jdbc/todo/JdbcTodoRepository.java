@@ -1,107 +1,56 @@
 package example.adapter.secondary.persistence.jdbc.todo;
 
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.jdbc.core.BeanPropertyRowMapper;
-import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-import org.springframework.jdbc.core.namedparam.SqlParameterSource;
-import org.springframework.jdbc.support.GeneratedKeyHolder;
-import org.springframework.jdbc.support.KeyHolder;
-import org.springframework.stereotype.Repository;
+import org.springframework.data.jdbc.repository.query.Query;
 
 import example.domain.todo.NewTodo;
 import example.domain.todo.Todo;
 import example.domain.todo.TodoFilter;
 import example.domain.todo.TodoRepository;
+import org.springframework.data.repository.Repository;
+import org.springframework.data.repository.query.Param;
 
-@Repository
-public class JdbcTodoRepository implements TodoRepository {
-    @Autowired
-    private NamedParameterJdbcTemplate jdbcTemplate;
+public interface JdbcTodoRepository extends TodoRepository, Repository<Todo, Long> {
+    @Override
+    Optional<Todo> findById(Long id);
 
     @Override
-    public Optional<Todo> findById(Long id) {
-        SqlParameterSource param = new MapSqlParameterSource().addValue("id", id);
+    List<Todo> findAll();
 
-        return jdbcTemplate.query(
-            "select * from todo where id = :id",
-            param,
-            new BeanPropertyRowMapper<>(Todo.class)
-        ).stream().findFirst();
+    @Override
+    default List<Todo> filterBy(TodoFilter filter) {
+        switch (filter) {
+            case Completed:
+                return filterByCompleted(true);
+            case Active:
+                return filterByCompleted(false);
+            default:
+                return findAll();
+        }
+    }
+
+    @Query("SELECT * FROM todo WHERE completed = :completed")
+    List<Todo> filterByCompleted(@Param("completed") Boolean completed);
+
+    @Override
+    default Todo save(NewTodo todo) {
+        return save(Todo.builder()
+                .id(null)
+                .title(todo.getTitle())
+                .desc(todo.getDesc())
+                .completed(todo.getCompleted())
+                .build());
     }
 
     @Override
-    public List<Todo> findAll() {
-        return jdbcTemplate.query(
-            "select * from todo",
-            new BeanPropertyRowMapper<>(Todo.class)
-        );
-    }
+    Todo save(Todo save);
 
     @Override
-    public List<Todo> filterBy(TodoFilter filter) {
-        String query = "select * from todo"
-                + (
-                      filter == TodoFilter.Active ? " where completed = false"
-                    : filter == TodoFilter.Completed ? " where completed = true"
-                    : ""
-                  );
-
-        return jdbcTemplate.query(
-                query,
-                new BeanPropertyRowMapper<>(Todo.class)
-        );
+    default void remove(Long id) {
+        deleteById(id);
     }
 
-    @Override
-    public Todo save(NewTodo todo) {
-        SqlParameterSource param =
-                new MapSqlParameterSource()
-                        .addValue("title", todo.getTitle())
-                        .addValue("desc", todo.getDesc())
-                        .addValue("completed", todo.getCompleted());
-
-        KeyHolder keyHolder = new GeneratedKeyHolder();
-
-        jdbcTemplate.update(
-            "insert into todo (`title`, `desc`, `completed`) values (:title, :desc, :completed)",
-            param,
-            keyHolder
-        );
-
-        Long id = Objects.requireNonNull(keyHolder.getKey()).longValue();
-
-        return new Todo(id, todo.getTitle(), todo.getDesc(), todo.getCompleted());
-    }
-
-    @Override
-    public Todo save(Todo todo) {
-        SqlParameterSource param =
-                new MapSqlParameterSource()
-                        .addValue("id", todo.getId())
-                        .addValue("title", todo.getTitle())
-                        .addValue("desc", todo.getDesc())
-                        .addValue("completed", todo.getCompleted());
-
-        jdbcTemplate.update(
-            "update todo set `title` = :title, `desc` = :desc, `completed` = :completed where `id` = :id",
-            param
-        );
-
-        return todo;
-    }
-
-    @Override
-    public void remove(Long id) {
-        SqlParameterSource param = new MapSqlParameterSource().addValue("id", id);
-
-        jdbcTemplate.update(
-            "delete from todo where id = :id",
-            param
-        );
-    }
+    void deleteById(Long id);
 }

@@ -1,6 +1,7 @@
 package example.domain.todo;
 
 import lombok.*;
+import org.springframework.data.annotation.Id;
 
 @Data
 @Builder
@@ -8,6 +9,7 @@ import lombok.*;
 @AllArgsConstructor
 @With
 public class Todo {
+    @Id
     private Long id;
     private String title;
     private String desc;
